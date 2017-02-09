@@ -2,7 +2,10 @@ package com.example.namit.apptwo;
 
 import android.app.FragmentTransaction;
 import android.app.Fragment;
+import android.content.ContentValues;
 import android.content.Intent;
+import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
 import android.net.Uri;
 import android.nfc.Tag;
 import android.os.Bundle;
@@ -14,16 +17,25 @@ import android.util.Log;
 import android.view.View;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ListView;
 import android.widget.RadioButton;
 import android.widget.RadioGroup;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import com.google.android.gms.appindexing.Action;
 import com.google.android.gms.appindexing.AppIndex;
 import com.google.android.gms.appindexing.Thing;
 import com.google.android.gms.common.api.GoogleApiClient;
+
+import java.util.ArrayList;
+
+import static android.provider.BaseColumns._ID;
+import static com.example.namit.apptwo.ADBHelper.FeedEntry.COLUMN_NAME_SUBTITLE;
+import static com.example.namit.apptwo.ADBHelper.FeedEntry.COLUMN_NAME_TITLE;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -39,6 +51,105 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
+
+        final ListView mListView = (ListView)findViewById(R.id.sqList);
+
+        final FeedReaderDbHelper mDbHelper = new FeedReaderDbHelper(getApplicationContext());
+
+        final Button sqwr = (Button)findViewById(R.id.write);
+        sqwr.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                String title = ((EditText)findViewById(R.id.heading)).getText().toString();
+                String subtitle = ((EditText)findViewById(R.id.subheading)).getText().toString();
+                // Gets the data repository in write mode
+                SQLiteDatabase db = mDbHelper.getWritableDatabase();
+
+// Create a new map of values, where column names are the keys
+                ContentValues values = new ContentValues();
+                values.put(COLUMN_NAME_TITLE, title);
+                values.put(ADBHelper.FeedEntry.COLUMN_NAME_SUBTITLE, subtitle);
+
+// Insert the new row, returning the primary key value of the new row
+                long newRowId = db.insert(ADBHelper.FeedEntry.TABLE_NAME, null, values);
+
+                Snackbar.make(findViewById(R.id.content_main), "Written", Snackbar.LENGTH_SHORT).show();
+
+
+            }
+        });
+
+        //Reading From DB
+
+
+        final Button sqrd = (Button)findViewById(R.id.find);
+        sqrd.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+
+                SQLiteDatabase db = mDbHelper.getReadableDatabase();
+
+// Define a projection that specifies which columns from the database
+// you will actually use after this query.
+                String[] projection = {
+                        _ID,
+                        COLUMN_NAME_TITLE,
+                        ADBHelper.FeedEntry.COLUMN_NAME_SUBTITLE
+                };
+
+// Filter results WHERE "title" = 'My Title'
+                String selection = COLUMN_NAME_TITLE + " = ?";
+                String[] selectionArgs = {((EditText)findViewById(R.id.crit)).getText().toString()};
+
+// How you want the results sorted in the resulting Cursor
+                String sortOrder =
+                        ADBHelper.FeedEntry.COLUMN_NAME_SUBTITLE + " DESC";
+
+                Cursor c = db.query(
+                        ADBHelper.FeedEntry.TABLE_NAME,                     // The table to query
+                        projection,                               // The columns to return
+                        selection,                                // The columns for the WHERE clause
+                        selectionArgs,                            // The values for the WHERE clause
+                        null,                                     // don't group the rows
+                        null,                                     // don't filter by row groups
+                        sortOrder                                 // The sort order
+                );
+
+                StringBuffer output;
+                final ArrayList res = new ArrayList<String>();
+
+                if(c.getCount()>0){
+                    while (c.moveToNext()) {
+                        output = new StringBuffer();
+                        // Update the progress message
+                /*updateBarHandler.post(new Runnable() {
+                    public void run() {
+                        pDialog.setMessage("Reading contacts : "+ counter++ +"/"+cursor.getCount());
+                    }
+                });*/
+                        String id = c.getString(c.getColumnIndex(_ID));
+                        String name = c.getString(c.getColumnIndex(COLUMN_NAME_TITLE));
+                        String sname = c.getString(c.getColumnIndex(COLUMN_NAME_SUBTITLE));
+                        output.append("ID:" + id + "\nTitle:" + name + "Subtitle:" + sname);
+                        Log.i("Found:", output.toString());
+                        ((TextView)findViewById(R.id.hello)).setText(((TextView)findViewById(R.id.hello)+"\n"+output.toString()));
+                        res.add(output.toString());
+                    }
+                    /*runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            ArrayAdapter<String> adapter = new ArrayAdapter<String>(getApplicationContext(), R.layout.sqtext, res);
+                            mListView.setAdapter(adapter);
+                        }
+                    });*/
+                }
+                else {
+                    Snackbar.make(findViewById(R.id.content_main), "Not Found", Snackbar.LENGTH_SHORT).show();
+                }
+            }
+        });
+
+
 
         final Intent k = new Intent(this, HelloService.class);
         final boolean servRunning = false;
